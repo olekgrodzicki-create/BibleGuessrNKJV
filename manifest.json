@@ -4,7 +4,7 @@
   "description": "Test your Bible knowledge by guessing Bible verses from different books, chapters, and contexts.",
   "start_url": "/BibleGuessrNKJV/index.html",
   "scope": "/BibleGuessrNKJV/",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "portrait-primary",
   "background_color": "#c8b878",
   "theme_color": "#b8860b",
