@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "knowthyscripture.bibleguessr",
+        "sha256_cert_fingerprints": ["38:88:C4:C2:5E:E3:9E:69:89:98:33:04:87:1A:BC:C7:B3:FF:62:EE:02:08:BF:95:95:D6:35:10:6D:0E:07:C8"]
+      }
+    }]
