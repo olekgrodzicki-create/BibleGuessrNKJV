@@ -1646,7 +1646,7 @@ function resetG() {
   G.selCh        = null;
   G.selVerse     = null;
   G.phase        = 'idle';
-  G.curTab       = 'NT';
+  G.curTab       = localStorage.getItem('bg_lasttab') || 'NT';
   G.speedMs      = 0;
   G.totalSpeedMs = 0;
   G.roundStartMs = 0;
@@ -3275,7 +3275,7 @@ function startGame() {
   G.totalRounds = rounds;
   resetStreak();
 
-  G.curTab = getAllowed().some(function(b){ return BOOKS.NT.indexOf(b)>=0; }) ? 'NT' : 'OT';
+  G.curTab = S.isTopicList ? (localStorage.getItem('bg_lasttab') || 'OT') : (getAllowed().some(function(b){ return BOOKS.NT.indexOf(b)>=0; }) ? 'NT' : 'OT');
 
   document.getElementById('home').classList.add('hidden');
   document.getElementById('setup').classList.add('hidden');
@@ -3836,6 +3836,7 @@ function highlightAnswer(v) {
 function swTab(t) {
   if (G.phase !== 'guess') return;
   G.curTab = t;
+  localStorage.setItem('bg_lasttab', t);
   document.getElementById('tot').classList.toggle('on', t==='OT');
   document.getElementById('tnt').classList.toggle('on', t==='NT');
   renderBooks();
@@ -5097,8 +5098,22 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .then(registration => { console.log('SW registered:', registration); })
       .catch(error => { console.log('SW registration failed:', error); });
+
+    // Listen for update notification from SW
+    navigator.serviceWorker.addEventListener('message', event => {
+      if (event.data && event.data.type === 'UPDATE_AVAILABLE') {
+        var banner = document.getElementById('sw-update-banner');
+        if (banner) banner.style.display = 'flex';
+      }
+    });
   });
 }
 </script>
+
+<!-- Update notification banner -->
+<div id="sw-update-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1a1208;border-top:2px solid #b8860b;padding:12px 16px;align-items:center;justify-content:space-between;gap:12px;font-family:Cinzel,serif;">
+  <span style="color:#c8b878;font-size:.8rem;letter-spacing:.04em;">⬆ New version available</span>
+  <button onclick="document.getElementById('sw-update-banner').style.display='none';window.location.reload(true);" style="background:#b8860b;color:#1a1208;border:none;padding:6px 16px;border-radius:3px;font-family:Cinzel,serif;font-size:.75rem;font-weight:700;cursor:pointer;letter-spacing:.05em;">UPDATE</button>
+</div>
 </body>
 </html>

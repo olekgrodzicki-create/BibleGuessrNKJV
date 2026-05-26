@@ -1,79 +1,85 @@
-const CACHE_NAME = 'bibleguessr-v1';
-const urlsToCache = [
-  './',
-  './index.html',
-  './manifest.json'
-];
+const CACHE_VERSION = 'v7';
+const CACHE_NAME = 'bibleguessr-' + CACHE_VERSION;
+const urlsToCache = ['./', './index.html', './manifest.json'];
 
-// Install event - cache essential files
+// Install — cache files, activate immediately
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      console.log('Cache opened');
-      return cache.addAll(urlsToCache).catch(err => {
-        console.log('Cache addAll error:', err);
-        // Continue even if some assets fail to cache
-        return Promise.resolve();
-      });
-    })
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(urlsToCache).catch(() => Promise.resolve()))
   );
   self.skipWaiting();
 });
 
-// Activate event - clean up old caches
+// Activate — delete old caches, take control
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys()
+      .then(names => Promise.all(
+        names.filter(n => n !== CACHE_NAME).map(n => caches.delete(n))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch — serve from cache instantly, revalidate in background ONLY for HTML
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') {
-    return;
-  }
+  if (event.request.method !== 'GET') return;
 
-  event.respondWith(
-    caches.match(event.request).then(response => {
-      // Return cached version if available
-      if (response) {
-        return response;
-      }
+  const isHTML = event.request.destination === 'document'
+    || event.request.url.endsWith('.html')
+    || event.request.url.endsWith('/');
 
-      return fetch(event.request)
-        .then(response => {
-          // Don't cache non-successful responses
-          if (!response || response.status !== 200 || response.type === 'error') {
+  if (isHTML) {
+    // Stale-while-revalidate: serve cache immediately, fetch update silently in background
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache => {
+        return cache.match(event.request).then(cached => {
+          const networkFetch = fetch(event.request).then(response => {
+            if (response && response.status === 200) {
+              // Check if content actually changed before notifying
+              response.clone().text().then(newText => {
+                if (cached) {
+                  cached.clone().text().then(oldText => {
+                    if (newText !== oldText) {
+                      // Content changed — update cache and notify clients
+                      cache.put(event.request, new Response(newText, {
+                        status: 200,
+                        headers: response.headers
+                      }));
+                      self.clients.matchAll().then(clients => {
+                        clients.forEach(client => client.postMessage({ type: 'UPDATE_AVAILABLE' }));
+                      });
+                    }
+                  });
+                } else {
+                  cache.put(event.request, response.clone());
+                }
+              });
+            }
             return response;
-          }
+          }).catch(() => null);
 
-          // Clone the response
-          const responseToCache = response.clone();
-
-          // Cache successful requests dynamically
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseToCache);
-          });
-
-          return response;
-        })
-        .catch(() => {
-          // Network request failed, return cached version or offline page
-          return caches.match('./index.html').then(response => {
-            return response || new Response('Offline - Please check your connection');
-          });
+          return cached || networkFetch;
         });
-    })
-  );
+      })
+    );
+  } else {
+    // Cache first for everything else
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        return cached || fetch(event.request).then(response => {
+          if (response && response.status === 200) {
+            caches.open(CACHE_NAME).then(c => c.put(event.request, response.clone()));
+          }
+          return response;
+        });
+      })
+    );
+  }
+});
+
+// Force update when app requests it
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
